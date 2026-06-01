@@ -127,8 +127,8 @@ class TM2TMetrics(Metric):
         # avoid cuda error of DDP in pampjpe
         joints_rst = joints_rst.detach().cpu().numpy()
         joints_ref = joints_ref.detach().cpu().numpy()
-        vertices_rst = vertices_rst.detach().cpu()
-        vertices_ref = vertices_ref.detach().cpu()
+        vertices_rst = vertices_rst.detach().cpu().float()
+        vertices_ref = vertices_ref.detach().cpu().float()
 
         part_lst = ['body', 'lhand', 'rhand']  #save time for validation during training
         for i in range(len(lengths)):

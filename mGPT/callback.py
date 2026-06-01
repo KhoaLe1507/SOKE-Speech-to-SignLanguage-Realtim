@@ -1,15 +1,19 @@
 import os
 import shutil
 from pytorch_lightning import LightningModule, Trainer
-from pytorch_lightning.callbacks import Callback, RichProgressBar, ModelCheckpoint
+from pytorch_lightning.callbacks import Callback, RichProgressBar, TQDMProgressBar, ModelCheckpoint
 
 
 def build_callbacks(cfg, logger=None, phase='test', **kwargs):
     callbacks = []
     logger = logger
 
-    # Rich Progress Bar
-    callbacks.append(progressBar())
+    # Rich progress can fail in Colab notebooks with "pop from empty list".
+    progress_bar = str(cfg.get('PROGRESS_BAR', 'rich')).lower()
+    if progress_bar == 'tqdm':
+        callbacks.append(TQDMProgressBar())
+    elif progress_bar not in ['none', 'false', '0']:
+        callbacks.append(progressBar())
 
     # Checkpoint Callback
     if phase == 'train':

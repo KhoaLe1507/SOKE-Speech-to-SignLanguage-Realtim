@@ -5,6 +5,7 @@ DEVICE: [0]
 PRECISION: bf16-mixed
 MATMUL_PRECISION: high
 BENCHMARK: true
+PROGRESS_BAR: tqdm
 
 TRAIN:
   STAGE: lm_pretrain
