@@ -7,8 +7,8 @@ TRAIN:
   #---------------------------------
   STAGE: lm_pretrain # stage "vae" , "lm_pretrain", "lm_instruct"
   #---------------------------------
-  NUM_WORKERS: 16 # Number of workers
-  BATCH_SIZE: 32 # Size of batches
+  NUM_WORKERS: 8 # Number of workers
+  BATCH_SIZE: 8 # Size of batches
   END_EPOCH: 150 # End epoch
   RESUME: '' # Resume training from this path
   PRETRAINED: '' # Preatrained model path

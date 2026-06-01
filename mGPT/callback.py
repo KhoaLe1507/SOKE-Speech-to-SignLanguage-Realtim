@@ -1,4 +1,5 @@
 import os
+import shutil
 from pytorch_lightning import LightningModule, Trainer
 from pytorch_lightning.callbacks import Callback, RichProgressBar, ModelCheckpoint
 
@@ -61,6 +62,22 @@ def getCheckpointCallback(cfg, logger=None, **kwargs):
     }
     callbacks.append(
         progressLogger(logger,metric_monitor=metric_monitor,log_every_n_steps=1))
+
+    checkpoint_cfg = cfg.get('CHECKPOINT', {})
+    if checkpoint_cfg.get('ENABLE_SAFE_CHECKPOINT', False):
+        callbacks.append(
+            safeCheckpoint(
+                dirpath=os.path.join(cfg.FOLDER_EXP, "checkpoints"),
+                logger=logger,
+                every_n_train_steps=checkpoint_cfg.get('EVERY_N_TRAIN_STEPS', 0),
+                every_n_epochs=checkpoint_cfg.get('EVERY_N_EPOCHS', 1),
+                keep_epoch_checkpoints=checkpoint_cfg.get('KEEP_EPOCH_CHECKPOINTS', True),
+                save_on_exception=checkpoint_cfg.get('SAVE_ON_EXCEPTION', True),
+                sync_dirpath=checkpoint_cfg.get('SYNC_DIRPATH', None),
+                sync_every_n_train_steps=checkpoint_cfg.get('SYNC_EVERY_N_TRAIN_STEPS', 0),
+                sync_every_n_epochs=checkpoint_cfg.get('SYNC_EVERY_N_EPOCHS', 0),
+                sync_on_exception=checkpoint_cfg.get('SYNC_ON_EXCEPTION', True),
+            ))
 
     # # Save latest checkpoints
     # checkpointParams = {
@@ -192,7 +209,15 @@ def getCheckpointCallback(cfg, logger=None, **kwargs):
 
     for metric in metrics:
         if metric in metric_monitor_map.keys():
-            metric_monitors = metric_monitor_map[metric]
+            metric_monitors = dict(metric_monitor_map[metric])
+            monitor_datasets = checkpoint_cfg.get('MONITOR_DATASETS', None)
+            if monitor_datasets:
+                monitor_datasets = set(monitor_datasets)
+                metric_monitors = {
+                    monitor: value
+                    for monitor, value in metric_monitors.items()
+                    if _metric_allowed_for_datasets(monitor, monitor_datasets)
+                }
 
             # Delete R3 if training VAE
             if cfg.TRAIN.STAGE == 'vae' and metric == 'TM2TMetrics':
@@ -214,6 +239,14 @@ def getCheckpointCallback(cfg, logger=None, **kwargs):
                     ModelCheckpoint(**checkpointParams))
     return callbacks
 
+
+def _metric_allowed_for_datasets(monitor, datasets):
+    metric_name = monitor.split('/')[-1]
+    dataset = metric_name.split('_', 1)[0]
+    if dataset in {'how2sign', 'csl', 'phoenix'}:
+        return dataset in datasets
+    return True
+
 class progressBar(RichProgressBar):
     def __init__(self, ):
         super().__init__()
@@ -223,6 +256,96 @@ class progressBar(RichProgressBar):
         items = super().get_metrics(trainer, model)
         items.pop("v_num", None)
         return items
+
+
+class safeCheckpoint(Callback):
+    def __init__(self,
+                 dirpath,
+                 logger=None,
+                 every_n_train_steps=0,
+                 every_n_epochs=1,
+                 keep_epoch_checkpoints=True,
+                 save_on_exception=True,
+                 sync_dirpath=None,
+                 sync_every_n_train_steps=0,
+                 sync_every_n_epochs=0,
+                 sync_on_exception=True):
+        self.dirpath = dirpath
+        self.logger = logger
+        self.every_n_train_steps = int(every_n_train_steps or 0)
+        self.every_n_epochs = int(every_n_epochs or 0)
+        self.keep_epoch_checkpoints = keep_epoch_checkpoints
+        self.save_on_exception = save_on_exception
+        self.sync_dirpath = sync_dirpath
+        self.sync_every_n_train_steps = int(sync_every_n_train_steps or 0)
+        self.sync_every_n_epochs = int(sync_every_n_epochs or 0)
+        self.sync_on_exception = sync_on_exception
+        self._last_saved_step = -1
+        self._last_synced_step = -1
+
+    def _log(self, message):
+        if self.logger is not None:
+            self.logger.info(message)
+
+    def _save_checkpoint(self, trainer, filename):
+        if not trainer.is_global_zero:
+            return
+        os.makedirs(self.dirpath, exist_ok=True)
+        target_path = os.path.join(self.dirpath, filename)
+        tmp_path = target_path + ".tmp"
+        trainer.save_checkpoint(tmp_path)
+        os.replace(tmp_path, target_path)
+        self._log(f"Safe checkpoint saved to {target_path}")
+
+    def _sync_checkpoint(self, filename):
+        if not self.sync_dirpath:
+            return
+        source_path = os.path.join(self.dirpath, filename)
+        if not os.path.exists(source_path):
+            self._log(f"Skip checkpoint sync because source is missing: {source_path}")
+            return
+        os.makedirs(self.sync_dirpath, exist_ok=True)
+        target_path = os.path.join(self.sync_dirpath, filename)
+        tmp_path = target_path + ".tmp"
+        shutil.copy2(source_path, tmp_path)
+        os.replace(tmp_path, target_path)
+        self._log(f"Safe checkpoint synced to {target_path}")
+
+    def on_train_batch_end(self, trainer: Trainer, pl_module: LightningModule,
+                           outputs, batch, batch_idx):
+        if self.every_n_train_steps <= 0:
+            return
+        step = int(trainer.global_step)
+        if step > 0 and step % self.every_n_train_steps == 0 and step != self._last_saved_step:
+            self._save_checkpoint(trainer, "last.ckpt")
+            self._last_saved_step = step
+        if self.sync_every_n_train_steps > 0 and step > 0 and step % self.sync_every_n_train_steps == 0 and step != self._last_synced_step:
+            self._sync_checkpoint("last.ckpt")
+            self._last_synced_step = step
+
+    def on_train_epoch_end(self, trainer: Trainer, pl_module: LightningModule):
+        if self.every_n_epochs <= 0:
+            return
+        epoch_number = int(trainer.current_epoch) + 1
+        if epoch_number % self.every_n_epochs == 0:
+            self._save_checkpoint(trainer, "last.ckpt")
+            sync_epoch = self.sync_every_n_epochs > 0 and epoch_number % self.sync_every_n_epochs == 0
+            if sync_epoch:
+                self._sync_checkpoint("last.ckpt")
+            if self.keep_epoch_checkpoints:
+                epoch_filename = f"epoch-{epoch_number:03d}.ckpt"
+                self._save_checkpoint(trainer, epoch_filename)
+                if sync_epoch:
+                    self._sync_checkpoint(epoch_filename)
+
+    def on_exception(self, trainer: Trainer, pl_module: LightningModule, exception):
+        if not self.save_on_exception:
+            return
+        self._save_checkpoint(trainer, "interrupted.ckpt")
+        self._save_checkpoint(trainer, "last.ckpt")
+        if self.sync_on_exception:
+            self._sync_checkpoint("interrupted.ckpt")
+            self._sync_checkpoint("last.ckpt")
 
 class progressLogger(Callback):
     def __init__(self,

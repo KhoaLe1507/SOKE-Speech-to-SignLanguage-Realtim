@@ -53,9 +53,12 @@ def resume_config(cfg: OmegaConf):
             # Checkpoints
             cfg.TRAIN.PRETRAINED = pjoin(resume, "checkpoints", "last.ckpt")
             # Wandb
-            wandb_files = os.listdir(pjoin(resume, "wandb", "latest-run"))
-            wandb_run = [item for item in wandb_files if "run-" in item][0]
-            cfg.LOGGER.WANDB.params.id = wandb_run.replace("run-","").replace(".wandb", "")
+            wandb_latest = pjoin(resume, "wandb", "latest-run")
+            if os.path.exists(wandb_latest):
+                wandb_files = os.listdir(wandb_latest)
+                wandb_runs = [item for item in wandb_files if "run-" in item]
+                if wandb_runs:
+                    cfg.LOGGER.WANDB.params.id = wandb_runs[0].replace("run-","").replace(".wandb", "")
         else:
             raise ValueError("Resume path is not right.")
 
@@ -122,6 +125,10 @@ def parse_args(phase="train"):
                            action="store_true",
                            required=False,
                            help="debug or not")
+        group.add_argument("--resume",
+                           type=str,
+                           required=False,
+                           help="experiment folder to resume from")
 
 
     if phase == "demo":
@@ -191,6 +198,7 @@ def parse_args(phase="train"):
         cfg.DEVICE = params.device if params.device else cfg.DEVICE
         cfg.NUM_NODES = params.num_nodes if params.num_nodes else cfg.NUM_NODES
         cfg.model.params.task = params.task if params.task else cfg.model.params.task
+        cfg.TRAIN.RESUME = params.resume if params.resume else cfg.TRAIN.RESUME
         cfg.DEBUG = not params.nodebug if params.nodebug is not None else cfg.DEBUG
 
         # Force no debug in test

@@ -2,6 +2,7 @@ import json
 import os
 import numpy as np
 import pytorch_lightning as pl
+import torch
 import torch.distributed as dist
 from pathlib import Path
 from rich import get_console
@@ -52,6 +53,10 @@ def main():
 
     # Seed
     pl.seed_everything(cfg.SEED_VALUE)
+    matmul_precision = cfg.get("MATMUL_PRECISION", None)
+    if matmul_precision and hasattr(torch, "set_float32_matmul_precision"):
+        torch.set_float32_matmul_precision(matmul_precision)
+        logger.info(f"torch matmul precision set to {matmul_precision}")
 
     # Environment Variables
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -70,8 +75,8 @@ def main():
     logger.info("model {} loaded".format(cfg.model.target))
 
     # Lightning Trainer
-    trainer = pl.Trainer(
-        benchmark=False,
+    trainer_kwargs = dict(
+        benchmark=cfg.get("BENCHMARK", False),
         max_epochs=cfg.TRAIN.END_EPOCH,
         accelerator=cfg.ACCELERATOR,
         devices=cfg.DEVICE,
@@ -85,6 +90,9 @@ def main():
         logger=None,
         callbacks=callbacks,
     )
+    if cfg.PRECISION:
+        trainer_kwargs["precision"] = cfg.PRECISION
+    trainer = pl.Trainer(**trainer_kwargs)
 
     # Strict load vae model
     if cfg.TRAIN.PRETRAINED_VAE:

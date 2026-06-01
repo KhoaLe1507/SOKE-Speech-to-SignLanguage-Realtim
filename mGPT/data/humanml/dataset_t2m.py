@@ -11,6 +11,7 @@ from tqdm import tqdm
 import random; random.seed(0)
 from copy import deepcopy
 from .load_data import load_csl_sample, load_h2s_sample, load_phoenix_sample
+from .filtering import filter_how2sign_csv
 
 # Some how2sign ids are broken, failing in pose fitting.
 bad_how2sign_ids = ['0DU7wWLK-QU_0-8-rgb_front', '0ICZi26jdaQ_28-5-rgb_front', '0vNfEYst_tQ_11-8-rgb_front', '13X0vEMNm7M_8-5-rgb_front', '14weIYQswlE_23-8-rgb_front', '1B56XMJ-j1Q_13-8-rgb_front', '1P0oKY4FNyI_0-8-rgb_front', '1dpRaxOTfZs_0-8-rgb_front', '1ei1kVTw23A_29-8-rgb_front', '1spCnuBmWYk_0-8-rgb_front', '2-vXO7MMLJc_0-5-rgb_front', '21PbS6wnHtY_0-5-rgb_front', '3tyfxL2wO-M_0-8-rgb_front', 'BpYDl3AO4B8_0-1-rgb_front', 'CH7AviIr0-0_14-8-rgb_front', 'CJ8RyW9pzKU_6-8-rgb_front', 'D0T7ho08Q3o_25-2-rgb_front', 'Db5SUQvNsHc_18-1-rgb_front', 'Eh697LCFjTw_0-3-rgb_front', 'F-p1IdedNbg_23-8-rgb_front', 'aUBQCNegrYc_13-1-rgb_front', 'cvn7htBA8Xc_9-8-rgb_front', 'czBrBQgZIuc_19-5-rgb_front', 'dbSAB8F8GYc_11-9-rgb_front', 'doMosV-zfCI_7-2-rgb_front', 'dvBdWGLzayI_10-8-rgb_front', 'eBrlZcccILg_26-3-rgb_front', '39FN42e41r0_17-1-rgb_front', 'a4Nxq0QV_WA_9-3-rgb_front', 'fzrJBu2qsM8_11-8-rgb_front', 'g3Cc_1-V31U_12-3-rgb_front']
@@ -60,6 +61,8 @@ class Text2MotionDataset(data.Dataset):
             self.fps = self.csv['fps']
             self.csv['DURATION'] = self.csv['END_REALIGNED'] - self.csv['START_REALIGNED']
             self.csv = self.csv[self.csv['DURATION']<30].reset_index(drop=True) # remove sequences longer than 30 seconds
+            self.csv = self.csv[~self.csv['SENTENCE_NAME'].isin(bad_how2sign_ids)].reset_index(drop=True)
+            self.csv = filter_how2sign_csv(self.csv, split, kwargs)
             self.ids = self.csv['SENTENCE_NAME'] #[:100]
 
             print('loading how2sign data...', len(self.ids))

@@ -67,6 +67,15 @@ class H2SDataModule(BASEDataModule):
         self.hparams.min_motion_length = cfg.DATASET.H2S.MIN_MOTION_LEN
         self.hparams.max_text_len = cfg.DATASET.H2S.MAX_TEXT_LEN
         self.hparams.unit_length = cfg.DATASET.H2S.UNIT_LEN
+        filter_cfg = cfg.DATASET.H2S.get('FILTER', {})
+        self.hparams.filter_seed = filter_cfg.get('SEED', cfg.SEED_VALUE)
+        self.hparams.filter_strategy = filter_cfg.get('STRATEGY', 'first')
+        self.hparams.train_max_duration = filter_cfg.get('TRAIN_MAX_DURATION', None)
+        self.hparams.train_max_samples = filter_cfg.get('TRAIN_MAX_SAMPLES', None)
+        self.hparams.val_max_duration = filter_cfg.get('VAL_MAX_DURATION', None)
+        self.hparams.val_max_samples = filter_cfg.get('VAL_MAX_SAMPLES', None)
+        self.hparams.test_max_duration = filter_cfg.get('TEST_MAX_DURATION', None)
+        self.hparams.test_max_samples = filter_cfg.get('TEST_MAX_SAMPLES', None)
 
         # Additional parameters
         self.hparams.debug = cfg.DEBUG

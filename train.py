@@ -23,6 +23,10 @@ def main():
 
     # Seed
     pl.seed_everything(cfg.SEED_VALUE)
+    matmul_precision = cfg.get("MATMUL_PRECISION", None)
+    if matmul_precision and hasattr(torch, "set_float32_matmul_precision"):
+        torch.set_float32_matmul_precision(matmul_precision)
+        logger.info(f"torch matmul precision set to {matmul_precision}")
 
     # Environment Variables
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -49,10 +53,9 @@ def main():
     logger.info("model {} loaded".format(cfg.model.target))
 
     # Lightning Trainer
-    trainer = pl.Trainer(
+    trainer_kwargs = dict(
         default_root_dir=cfg.FOLDER_EXP,
         max_epochs=cfg.TRAIN.END_EPOCH,
-        # precision='16',
         logger=pl_loggers,
         callbacks=callbacks,
         check_val_every_n_epoch=cfg.LOGGER.VAL_EVERY_STEPS,
@@ -61,10 +64,13 @@ def main():
         num_nodes=cfg.NUM_NODES,
         strategy="ddp_find_unused_parameters_true" if len(cfg.DEVICE) > 1 else 'auto',
         # strategy=DDPStrategy(process_group_backend="nccl"),
-        benchmark=False,
+        benchmark=cfg.get("BENCHMARK", False),
         deterministic=False,
         # num_sanity_val_steps=0,  #for debug
     )
+    if cfg.PRECISION:
+        trainer_kwargs["precision"] = cfg.PRECISION
+    trainer = pl.Trainer(**trainer_kwargs)
     logger.info("Trainer initialized")
 
     # Strict load pretrianed model
