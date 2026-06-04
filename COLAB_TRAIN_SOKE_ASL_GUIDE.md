@@ -1,4 +1,4 @@
-# Huong Dan Train SOKE ASL 5K Tren Google Colab Theo Huong Hybrid
+# Huong Dan Train SOKE ASL Tren Google Colab Theo Huong Hybrid
 
 Tai lieu nay dung cho luong train tren Colab Pro A100:
 
@@ -18,12 +18,48 @@ Doc hang tram nghin file .pkl nho truc tiep tu Drive rat cham.
 Checkpoint nen ghi local truoc de nhanh, roi sync sang Drive moi epoch de resume duoc neu Colab ngat.
 ```
 
+## 0. Cac Fix Colab Da Duoc Giu Lai Cho Dataset 21k_8s
+
+Notebook/config 21k_8s van giu cac buoc xu ly loi da gap khi train 5k:
+
+```text
+notebooks/train_soke_colab_asl_21k_8s.ipynb
+configs/soke_colab_asl_21k_8s.yaml
+```
+
+Cac fix quan trong:
+
+```text
+1. Khong cai requirements.txt goc vi co bpy/Blender va mot so package render de gay loi tren Colab.
+2. Force reinstall numpy==1.26.4 de tranh loi numpy.dtype size changed.
+3. Patch torch.load(..., weights_only=False) de tranh loi PyTorch 2.6 khi load tokenizer.ckpt/last.ckpt.
+4. Dung PROGRESS_BAR: tqdm de tranh loi RichProgressBar pop from empty list trong Colab notebook.
+5. Patch metric t2m cast vertices ve float32 de tranh loi bf16: float != c10::BFloat16 khi validation.
+6. Tu sua layout t2m.tar.gz neu finest.tar bi giai nen long folder.
+7. Tokenization co log /content/tokenize_debug.log va check so token theo CSV/config, khong hardcode 5000.
+8. Train co log /content/train_debug.log de debug khi subprocess fail.
+9. Checkpoint luu local /content truoc, sync sang Drive moi epoch, va co interrupted.ckpt khi exception/interruption mem.
+```
+
 ## 1. Code Va File Chinh
 
-Config train:
+Config train chinh cho dataset How2Sign 21k_8s tren A100 40GB:
+
+```text
+configs/soke_colab_asl_21k_8s.yaml
+```
+
+Notebook chinh cho dataset How2Sign 21k_8s:
+
+```text
+notebooks/train_soke_colab_asl_21k_8s.ipynb
+```
+
+Config/notebook 5k cu van duoc giu de doi chieu:
 
 ```text
 configs/soke_colab_asl_5k.yaml
+notebooks/train_soke_colab_asl_5k.ipynb
 ```
 
 Config asset/output:
@@ -32,19 +68,19 @@ Config asset/output:
 configs/assets_colab.yaml
 ```
 
-Notebook:
-
-```text
-notebooks/train_soke_colab_asl_5k.ipynb
-```
-
 Requirements rieng cho Colab:
 
 ```text
 requirements-colab.txt
 ```
 
-Script tao subset How2Sign 5K:
+Script tao dataset How2Sign 21k_8s:
+
+```text
+scripts/export_how2sign_colab_21k_8s_dataset.py
+```
+
+Script tao subset How2Sign 5K cu:
 
 ```text
 scripts/export_how2sign_colab_subset.py
@@ -57,6 +93,7 @@ Khong push data/assets/checkpoints len GitHub. `.gitignore` da ignore cac thu mu
 ```text
 data/
 data_colab_5k/
+data_colab_21k_8s/
 deps/
 experiments/
 results/
