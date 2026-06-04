@@ -313,9 +313,10 @@ class safeCheckpoint(Callback):
         tmp_path = target_path + ".tmp"
 
         # Google Drive allows duplicate names and its Colab FUSE mount can turn
-        # os.replace into another same-name object. Delete by name first so the
-        # checkpoint folder keeps one canonical last.ckpt/interrupted.ckpt.
-        self._remove_sync_duplicates(filename)
+        # os.replace into another same-name object. Copy a complete temp file
+        # first, then delete old same-name targets so Drive keeps one canonical
+        # last.ckpt/interrupted.ckpt without losing the previous checkpoint if
+        # the upload is interrupted mid-copy.
         self._remove_sync_duplicates(filename + ".tmp")
 
         shutil.copy2(source_path, tmp_path)
