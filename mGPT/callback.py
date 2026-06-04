@@ -311,9 +311,36 @@ class safeCheckpoint(Callback):
         os.makedirs(self.sync_dirpath, exist_ok=True)
         target_path = os.path.join(self.sync_dirpath, filename)
         tmp_path = target_path + ".tmp"
+
+        # Google Drive allows duplicate names and its Colab FUSE mount can turn
+        # os.replace into another same-name object. Delete by name first so the
+        # checkpoint folder keeps one canonical last.ckpt/interrupted.ckpt.
+        self._remove_sync_duplicates(filename)
+        self._remove_sync_duplicates(filename + ".tmp")
+
         shutil.copy2(source_path, tmp_path)
+        self._remove_sync_duplicates(filename)
         os.replace(tmp_path, target_path)
         self._log(f"Safe checkpoint synced to {target_path}")
+
+    def _remove_sync_duplicates(self, filename, max_attempts=20):
+        if not self.sync_dirpath:
+            return
+        target_path = os.path.join(self.sync_dirpath, filename)
+        removed = 0
+        for _ in range(max_attempts):
+            if not os.path.exists(target_path):
+                break
+            try:
+                os.remove(target_path)
+                removed += 1
+            except FileNotFoundError:
+                break
+            except OSError as exc:
+                self._log(f"Could not remove old synced checkpoint {target_path}: {exc}")
+                break
+        if removed:
+            self._log(f"Removed {removed} old synced checkpoint file(s) named {filename}")
 
     def on_train_batch_end(self, trainer: Trainer, pl_module: LightningModule,
                            outputs, batch, batch_idx):

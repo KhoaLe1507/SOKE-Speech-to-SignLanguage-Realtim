@@ -39,6 +39,7 @@ Cac fix quan trong:
 7. Tokenization co log /content/tokenize_debug.log va check so token theo CSV/config, khong hardcode 5000.
 8. Train co log /content/train_debug.log de debug khi subprocess fail.
 9. Checkpoint luu local /content truoc, sync sang Drive moi epoch, va co interrupted.ckpt khi exception/interruption mem.
+10. Truoc khi sync checkpoint len Drive, code xoa file trung ten cu de tranh Google Drive tao nhieu last.ckpt cung ten.
 ```
 
 ## 1. Code Va File Chinh
